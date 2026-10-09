@@ -10,7 +10,7 @@ A native SwiftUI port of Entropy Piano Tuner by Haye Hinrichsen and Christoph Wi
 
 The port uses Swift, SwiftUI, AVFoundation, Accelerate, SwiftData, and CloudKit. It stays GPL-3. Upstream is <https://gitlab.com/tp3/Entropy-Piano-Tuner>. The GitHub mirror is <https://github.com/levush/Entropy-Piano-Tuner>. The modules that were ported are `modules/algorithms/entropyminimizer/entropyminimizer.cpp` (about 791 lines) and `auditorypreprocessing.cpp` (about 447 lines). FFTW, Qt, libuv, qwt, and tp3log stay out. Output is not claimed to be bit-identical to the Qt app. Accelerate's FFT and the Hann window are the likely sources of a numerical difference.
 
-Local checkout on Alex's Mac: `/Users/alex/Projects/EntropyPianoTuner`. Open `EntropyPianoTuner.xcodeproj`. There is no separate `.xcworkspace`.
+Local checkout on Alex's Mac: `/Users/alex/Projects/EntropyPianoTuner`. Open `EntropyPianoTuner.xcodeproj`. There is no separate `.xcworkspace`. That folder is its own git repository and it has no remote. The files match GitHub `main` at <https://github.com/alexshultz/entropypianotuner>. The commit history does not. Do not force-push the local root over `main`.
 
 ## Rules
 
@@ -77,11 +77,24 @@ In Xcode, Run is the toolbar triangle (Command-R). The destination popup is besi
 
 `.gitignore` ignores `.DS_Store`, `build/`, `DerivedData/`, `*.xcuserstate`, and `xcuserdata/`. Leave user-specific Xcode state out of commits.
 
-`AlgorithmCheck/main.swift` is a command-line check, not an XCTest target. There is no test target. The check builds a 440 Hz sine, checks that a one-bin spectrum has entropy 0, runs the preprocessor and a low-accuracy search on synthetic inharmonic spectra with seed 1, and checks that A4 stays at 0 cents, that the treble sits sharper than the bass, and that pitch-raise also leaves A4 at 0. Compile it with `EntropyPianoTuner/Model/Piano.swift` and the files in `EntropyPianoTuner/Tuning/`. It does not link the app, the store, or the UI.
+`AlgorithmCheck/main.swift` is a command-line check, not an XCTest target. There is no test target. The check builds a 440 Hz sine, checks that a one-bin spectrum has entropy 0, runs the preprocessor and a low-accuracy search on synthetic inharmonic spectra with seed 1, and checks that A4 stays at 0 cents, that the treble sits sharper than the bass, and that pitch-raise also leaves A4 at 0. It does not link the app, the store, or the UI. From the repo root:
+
+```sh
+swiftc -framework Accelerate \
+  AlgorithmCheck/main.swift \
+  EntropyPianoTuner/Model/Piano.swift \
+  EntropyPianoTuner/Tuning/*.swift \
+  -o /tmp/ept-algorithm-check
+/tmp/ept-algorithm-check
+```
+
+The last line it prints is `OK`. The low-accuracy search takes a couple of minutes.
 
 ## Layout and the platforms that reject APIs
 
 `RootView` is a `NavigationSplitView` on iPhone, iPad, Mac, and visionOS. On watchOS it is a `NavigationStack` that swaps `LibraryView` and `WatchWorkspace`. `WorkspaceView` still compiles for watchOS, so a watch-unavailable call there breaks the watch build even though the watch never shows that view.
+
+`LibraryView` lists pianos. New piano creates one and Delete removes it. An open piano has three pages, `WorkspacePage.record`, `.calculate`, and `.tune`. Record offers Capture, Clear, and Auto capture. Calculate offers Entropy or Pitch raise, a seed, the bass break, and Calculate tuning. Tune offers −1¢, In tune, and +1¢.
 
 | API | Where it is allowed |
 | --- | --- |
@@ -154,7 +167,7 @@ CloudKit will deliver two rows for one logical id. `reconcile` groups by `pianoI
 
 Debug builds share the CloudKit Development database. Release and TestFlight use Production until that schema is deployed in the CloudKit console. Sync is eventual. A second device sees the same Development pianos only if it too is a Debug build from Xcode.
 
-`importLegacyLibrary` runs once per device. The flag is the UserDefaults key `EntropyPianoTuner.legacyImportedKey`. It reads sibling folders of the store directory that contain `piano.json`, skips ids already in the store, stamps `modifiedAt` from the file's modification date or `.distantPast`, and reads `spectra.bin` as 88 concatenated Float32 spectra. A later cloud edit wins because its `modifiedAt` is newer. The flag is per device, not in CloudKit. Do not clear it unless a reimport is the task.
+`importLegacyLibrary` runs once per device. The flag is `PianoCloud.legacyImportedKey`, and the UserDefaults string is `EntropyPianoTuner.legacyLibraryImported`. It reads sibling folders of the store directory that contain `piano.json`, skips ids already in the store, stamps `modifiedAt` from the file's modification date or `.distantPast`, and reads `spectra.bin` as 88 concatenated Float32 spectra. A later cloud edit wins because its `modifiedAt` is newer. The flag is per device, not in CloudKit. Do not clear it unless a reimport is the task.
 
 `Supporting/BackgroundModes.plist` contains only `UIBackgroundModes` = `remote-notification`. `INFOPLIST_FILE` points at it for `iphoneos*`, `iphonesimulator*`, `watchos*`, and `watchsimulator*` only. `GENERATE_INFOPLIST_FILE` stays YES, so the microphone string, orientations, display name, and scene manifest still come from the `INFOPLIST_KEY_*` build settings. Mac and visionOS do not use that plist.
 
@@ -182,7 +195,7 @@ The vision stack used to be named `AppIcon.solidimagestack`. The rename is what 
 - Sharing one spectrum record for the whole piano blows the CloudKit size limit.
 - `@Attribute(.unique)` on `pianoID` or `keyID` fights CloudKit. Duplicates are reconciled in code.
 - Turning autosave on and also calling `save` double-writes.
-- Resetting `EntropyPianoTuner.legacyImportedKey` reimports old folders over the cloud library.
+- Resetting `PianoCloud.legacyImportedKey` (`EntropyPianoTuner.legacyLibraryImported`) reimports old folders over the cloud library.
 - Replacing `EntropyMinimizer`'s initial curve with `PitchRaise.compute` changes the search. They are different partial mixes on purpose.
 - Installing the SwiftUI Pro skill (twostraws/swiftui-agent-skill) does not help the tuner. It assumes an iOS 26 deployment target and does not cover this algorithm or the audio path. It is not installed.
 - Reinstalling the configuration profiles Client-SecureQ and Secure-InterQ, and fully trusting them, can stall Verify App again. Leave the Atkinson Hyperlegible iFont profiles in place.
