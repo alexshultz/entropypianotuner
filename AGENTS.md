@@ -2,6 +2,19 @@
 
 Read this file before you change the project. It is the operating manual for a session that has never seen the code.
 
+## If you read the design guidelines first
+
+`projects/Apple-OS27-Design-Guidelines.md` already decided the screen chrome, and this project has already applied it. Leave the finished screens alone. Do not run apple-hig enforce mode, and do not start a superpowers plan to redesign Record, Calculate, and Tune. That page still wins for a later screen change this file has not settled.
+
+These decisions stay, even when that page says otherwise:
+
+- App icons stay the four PNG sets in `Assets.xcassets`. Leave Icon Composer out of this project.
+- Apple TV stays out. The apple-hig tvOS topics do not add a tvOS target.
+- The piano keyboard, the cents meter, and the tuning curve stay. Ponytail's "do not build it" leaves those three in place. The system has no control for them.
+- Record, Calculate, and Tune stay the three jobs.
+- Swift packages stay welcome when the SDK does not already do the job. The page's "no new dependency" line does not forbid a package.
+- The entropy search, the CloudKit model, signing, and the GPL credit stay as written in Rules. Build with the released Xcode 27.0. This project does not need the Xcode 27.1 candidate.
+
 When this file and the Swift disagree, trust the Swift and update this file in the same change. The machine section is about Alex's Mac and phone on 2026-10-08. It is not part of the algorithm.
 
 ## What this is
@@ -94,7 +107,7 @@ The last line it prints is `OK`. The low-accuracy search takes a couple of minut
 
 UI chrome follows `projects/Apple-OS27-Design-Guidelines.md` in the Seldon vault. Read that page before changing screens. System controls, Liquid Glass on functional layers only, semantic colors, SF Symbols, Dynamic Type, and about 44 pt targets win over a custom button style or a fixed RGB palette.
 
-That page does not win over the entropy search, the CloudKit model, signing, or the Apple TV exclusion. The piano keyboard, the cents meter, and the tuning curve stay custom because the system has no control for them.
+The chrome pass is finished. The list at the top of this file stays in force: the four PNG icon sets, no Apple TV target, no enforce-mode restyle, and the piano keyboard, cents meter, and tuning curve. That page also leaves the entropy search, the CloudKit model, and signing alone.
 
 The app follows the system appearance. Do not force a color scheme, and do not bring back a fixed RGB palette or `FilledButton`. Buttons are `.bordered` and `.borderedProminent`. The library is a system list titled Pianos, and Delete asks before it removes a piano. Record, Calculate, and Tune stay the three pages. On the Mac the page control sits in the toolbar, and the Tuner menu repeats New Piano, Pianos, Record, Calculate, Tune, and the microphone. Command-N makes a piano. Command-1, Command-2, and Command-3 switch pages. watchOS has no menu bar, so those commands are not compiled there. On iPhone, iPad, and visionOS the page control is a segmented picker. watchOS uses a navigation-link picker and does not show the iPhone workspace. Calculate is a grouped form: Entropy or Pitch raise, accuracy, seed, piano name, concert pitch from 415 to 466, bass break from 8 to 40, and Calculate tuning. Auto capture is a checkbox on the Mac and a toggle-like button elsewhere. The microphone item uses `mic.fill` and `mic.slash`.
 
