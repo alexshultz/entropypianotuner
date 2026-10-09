@@ -77,7 +77,7 @@ In Xcode, Run is the toolbar triangle (Command-R). The destination popup is besi
 
 `.gitignore` ignores `.DS_Store`, `build/`, `DerivedData/`, `*.xcuserstate`, and `xcuserdata/`. Leave user-specific Xcode state out of commits.
 
-`AlgorithmCheck/main.swift` is a command-line check, not an XCTest target. There is no test target. The check builds a 440 Hz sine, checks that a one-bin spectrum has entropy 0, runs the preprocessor and a low-accuracy search on synthetic inharmonic spectra with seed 1, and checks that A4 stays at 0 cents, that the treble sits sharper than the bass, and that pitch-raise also leaves A4 at 0. It does not link the app, the store, or the UI. From the repo root:
+`AlgorithmCheck/main.swift` is a command-line check, not an XCTest. The XCTest bundle is under Tests below. The check builds a 440 Hz sine, checks that a one-bin spectrum has entropy 0, runs the preprocessor and a low-accuracy search on synthetic inharmonic spectra with seed 1, and checks that A4 stays at 0 cents, that the treble sits sharper than the bass, and that pitch-raise also leaves A4 at 0. It does not link the app, the store, or the UI. From the repo root:
 
 ```sh
 swiftc -framework Accelerate \
@@ -94,7 +94,11 @@ The last line it prints is `OK`. The low-accuracy search takes a couple of minut
 
 UI chrome follows `projects/Apple-OS27-Design-Guidelines.md` in the Seldon vault. Read that page before changing screens. System controls, Liquid Glass on functional layers only, semantic colors, SF Symbols, Dynamic Type, and about 44 pt targets win over a custom button style or a fixed RGB palette.
 
-That page does not win over the entropy search, the CloudKit model, signing, or the Apple TV exclusion. The piano keyboard, the cents meter, and the tuning curve stay custom because the system has no control for them. `Theme` and the forced dark scheme are the current look. The redesign replaces that chrome and keeps record, calculate, and tune working.
+That page does not win over the entropy search, the CloudKit model, signing, or the Apple TV exclusion. The piano keyboard, the cents meter, and the tuning curve stay custom because the system has no control for them.
+
+The app follows the system appearance. Do not force a color scheme, and do not bring back a fixed RGB palette or `FilledButton`. Buttons are `.bordered` and `.borderedProminent`. The library is a system list titled Pianos, and Delete asks before it removes a piano. Record, Calculate, and Tune stay the three pages. On the Mac the page control sits in the toolbar, and the Tuner menu repeats New Piano, Pianos, Record, Calculate, Tune, and the microphone. Command-N makes a piano. Command-1, Command-2, and Command-3 switch pages. watchOS has no menu bar, so those commands are not compiled there. On iPhone, iPad, and visionOS the page control is a segmented picker. watchOS uses a navigation-link picker and does not show the iPhone workspace. Calculate is a grouped form: Entropy or Pitch raise, accuracy, seed, piano name, concert pitch from 415 to 466, bass break from 8 to 40, and Calculate tuning. Auto capture is a checkbox on the Mac and a toggle-like button elsewhere. The microphone item uses `mic.fill` and `mic.slash`.
+
+White keys are 44 pt wide. Black keys are 28 pt wide and stay narrower. Both numbers live on `PianoLayout`. `PitchVerdict` owns the one-cent band: inside ±1 cent is in tune, below is flat, above is sharp, and a missing reading is listening. The meter, the tune page, and the tests share that type. Tuned keys show a checkmark. Recorded keys show an orange dot. Status colors are system green, blue, and red. The keyboard is in `safeAreaBar`, which is the functional layer, so the system draws its material. Do not paint an opaque bar behind the keys.
 
 ## Tests
 
@@ -112,7 +116,7 @@ xcodebuild -project EntropyPianoTuner.xcodeproj -scheme EntropyPianoTuner \
 
 `RootView` is a `NavigationSplitView` on iPhone, iPad, Mac, and visionOS. On watchOS it is a `NavigationStack` that swaps `LibraryView` and `WatchWorkspace`. `WorkspaceView` still compiles for watchOS, so a watch-unavailable call there breaks the watch build even though the watch never shows that view.
 
-`LibraryView` lists pianos. New piano creates one and Delete removes it. An open piano has three pages, `WorkspacePage.record`, `.calculate`, and `.tune`. Record offers Capture, Clear, and Auto capture. Calculate offers Entropy or Pitch raise, a seed, the bass break, and Calculate tuning. Tune offers −1¢, In tune, and +1¢.
+`LibraryView` lists pianos. New piano creates one. Delete asks, then removes it. An open piano has three pages, `WorkspacePage.record`, `.calculate`, and `.tune`. Record offers Capture, Clear, and Auto capture. Calculate offers Entropy or Pitch raise, accuracy, a seed, the piano name, concert pitch, the bass break, and Calculate tuning. Tune offers −1¢, In tune, and +1¢. Changing the name calls `rename`. Changing concert pitch calls `setConcertPitch` and does not recompute the curve, so the library row can become Stale.
 
 | API | Where it is allowed |
 | --- | --- |
@@ -124,15 +128,18 @@ xcodebuild -project EntropyPianoTuner.xcodeproj -scheme EntropyPianoTuner \
 | `keyboardType` | iOS and visionOS only. |
 | `navigationBarTitleDisplayMode` | Everywhere except macOS. |
 | `digitalCrownRotation` | watchOS, in `WatchWorkspace`. |
-| `safeAreaBar` | OS 26 and later, inside `Theme.dockedKeyboard`. Older OS versions get a `VStack` with the keyboard under the page. |
+| `safeAreaBar` | Every platform this app runs. `dockedKeyboard` calls it directly. |
+| `.toggleStyle(.checkbox)` | macOS only. The other platforms use a bordered button for Auto capture. |
+| `.listStyle(.insetGrouped)` | iOS. The Mac library uses `.sidebar`. |
+| `commands`, `keyboardShortcut` | Everywhere except watchOS. The Tuner menu is compiled out of the watch build. |
 
-The watch has no 88-key keyboard. The crown selects the key. Capture, calculate, nudge, and "in tune" are buttons.
+The watch has no 88-key keyboard. The crown selects the key. Capture, calculate, nudge, and "in tune" are full-width system buttons. Previous and next are the chevrons. The watch toolbar can stop the microphone.
 
-`PianoKeyboard` keys are buttons with `accessibilityLabel(PianoLayout.label)` and `.isSelected` on the active key. The cents meter exposes the cents reading and the level. The color scheme is dark. The tint is `Theme.amber`.
+`PianoKeyboard` keys are buttons with `accessibilityLabel(PianoLayout.label)` and `.isSelected` on the active key. The accessibility value is Tuned, Recorded, or Not recorded. The cents meter exposes the cents reading and the level. The app follows the system appearance.
 
 Mac window default size is 1100×780, minimum 880×680. visionOS default size is 1280×800. The microphone starts when a workspace appears and stops when it disappears. The usage string is the target's `INFOPLIST_KEY_NSMicrophoneUsageDescription`.
 
-`Theme.dockedKeyboard` is the keyboard inset. The floor is OS 27, so `safeAreaBar(edge: .bottom)` is available on every system this app runs. It is what moves the keyboard off the iPhone Duo vertical bar. The older `VStack` fallback may go away when the keyboard is redesigned.
+`dockedKeyboard` in `Theme.swift` is the keyboard inset. It calls `safeAreaBar(edge: .bottom)`. That is what moves the keyboard off the iPhone Duo vertical bar.
 
 ## Tuning pipeline
 
@@ -230,7 +237,7 @@ The connected phone is an iPhone 16 Pro Max, model iPhone17,2, iOS 27.0.1 (24A44
 
 The watch uses this same target. It installs through the paired iPhone. Turn on Developer Mode on the watch if the install asks. No separate watch target exists.
 
-The paid-signed generic iOS Debug build succeeded and its codesign entitlements included the CloudKit container. That build was not installed onto the phone from here. Alex runs it from Xcode. Before the entitlements file was attached, Debug builds succeeded for the iOS simulator, Mac, visionOS simulator, and watchOS simulator. watchOS was not rebuilt after `BackgroundModes.plist` was wired up. No iPad, Watch, or Vision Pro was connected for an install.
+The paid-signed generic iOS Debug build succeeded and its codesign entitlements included the CloudKit container. That build was not installed onto the phone from here. Alex runs it from Xcode. Before the entitlements file was attached, Debug builds succeeded for the iOS simulator, Mac, visionOS simulator, and watchOS simulator. On 2026-10-08 the redesign's generic iOS, watchOS, and visionOS Debug builds succeeded, so the background-mode plist is in a watch compile. No iPad, Watch, or Vision Pro was connected for an install.
 
 ## Not verified
 
@@ -239,7 +246,7 @@ Do not report these as done.
 - Two devices signed into the same iCloud account seeing the same piano.
 - A legacy `piano.json` folder imported into a live store.
 - A real CloudKit duplicate reconciled by `modifiedAt`.
-- A watchOS build after the background-mode plist was added.
+- An install on a Watch. A generic watchOS Debug build succeeded on 2026-10-08.
 - The Production CloudKit schema. Until it is deployed, a Release or TestFlight build has an empty library even when Debug on another device has pianos.
 - A bit-match against the Qt tuner.
 - Launch of the paid-signed app on the phone, an iPad, a Watch, or Vision Pro from this session.

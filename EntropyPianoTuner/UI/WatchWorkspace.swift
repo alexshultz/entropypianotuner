@@ -10,10 +10,9 @@ struct WatchWorkspace: View {
             VStack(spacing: 8) {
                 Text(PianoLayout.label(session.selectedKey))
                     .font(.title2.weight(.semibold))
-                    .foregroundStyle(Theme.ink)
                 Text("\(session.piano?.recordedCount ?? 0) of 88")
                     .font(.caption2)
-                    .foregroundStyle(Theme.muted)
+                    .foregroundStyle(.secondary)
                 Meter(cents: session.reading.cents, level: session.reading.level, compact: true)
                 HStack {
                     Button {
@@ -21,38 +20,45 @@ struct WatchWorkspace: View {
                     } label: {
                         Image(systemName: "chevron.left")
                     }
-                    Button("Capture") { session.captureNow() }
+                    .accessibilityLabel("Previous key")
                     Button {
                         session.select(min(PianoLayout.keyCount - 1, session.selectedKey + 1))
                     } label: {
                         Image(systemName: "chevron.right")
                     }
+                    .accessibilityLabel("Next key")
                 }
                 .buttonStyle(.bordered)
+                Button("Capture") { session.captureNow() }
+                    .buttonStyle(.borderedProminent)
                 if let target = session.piano?.targetFrequency(for: session.selectedKey) {
                     Text(String(format: "%.1f Hz", target))
                         .font(.caption2)
-                        .foregroundStyle(Theme.muted)
-                    HStack {
-                        Button("−1¢") { session.nudgeSelected(by: -1) }
-                        Button("In tune") { session.markTuned() }
-                        Button("+1¢") { session.nudgeSelected(by: 1) }
-                    }
-                    .buttonStyle(.bordered)
-                    .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                    Button("−1¢") { session.nudgeSelected(by: -1) }
+                        .buttonStyle(.bordered)
+                    Button("In tune") { session.markTuned() }
+                        .buttonStyle(.borderedProminent)
+                    Button("+1¢") { session.nudgeSelected(by: 1) }
+                        .buttonStyle(.bordered)
                 }
                 if session.piano?.recordedCount == PianoLayout.keyCount {
                     if session.calculating {
                         ProgressView(value: session.progress)
                         Button("Stop") { session.stopCalculation() }
+                            .buttonStyle(.bordered)
                     } else {
                         Button("Calculate") { session.calculate() }
+                            .buttonStyle(.borderedProminent)
                     }
                 }
-                Text(session.status)
-                    .font(.caption2)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Theme.muted)
+                if !session.status.isEmpty {
+                    Text(session.status)
+                        .font(.caption2)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .navigationTitle(session.piano?.name ?? "Piano")
@@ -76,6 +82,14 @@ struct WatchWorkspace: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Pianos") { session.closePiano() }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    session.toggleMicrophone()
+                } label: {
+                    Image(systemName: session.microphoneOn ? "mic.fill" : "mic.slash")
+                }
+                .accessibilityLabel(session.microphoneOn ? "Stop microphone" : "Start microphone")
             }
         }
         .onAppear {
