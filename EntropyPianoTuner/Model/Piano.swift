@@ -5,6 +5,14 @@ enum PianoLayout {
     static let a4 = 48
     static let names = ["A", "A♯", "B", "C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯"]
 
+    // White keys use the 44 pt default hit width. Black keys use the 28 pt minimum and stay narrower so the keyboard still reads as a piano.
+    static let whiteKeyWidth = 44.0
+    static let whiteKeyHeight = 148.0
+    static let blackKeyWidth = 28.0
+    static let blackKeyHeight = 96.0
+    static let keySpacing = 3.0
+    static var blackKeyOffset: Double { keySpacing / 2 + blackKeyWidth / 2 }
+
     static func isBlack(_ index: Int) -> Bool {
         let n = index % 12
         return n == 1 || n == 4 || n == 6 || n == 9 || n == 11
@@ -18,6 +26,28 @@ enum PianoLayout {
 
     static func frequency(key: Int, cents: Double, concertPitch: Double) -> Double {
         concertPitch * pow(2.0, (Double(key - a4) + cents / 100.0) / 12.0)
+    }
+}
+
+enum PitchVerdict: Equatable {
+    case listening
+    case inTune
+    case flat
+    case sharp
+
+    static func from(cents: Double?) -> PitchVerdict {
+        guard let cents else { return .listening }
+        if abs(cents) < 1 { return .inTune }
+        return cents < 0 ? .flat : .sharp
+    }
+
+    var label: String {
+        switch self {
+        case .listening: return "Listening"
+        case .inTune: return "In tune"
+        case .flat: return "Flat"
+        case .sharp: return "Sharp"
+        }
     }
 }
 

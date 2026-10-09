@@ -1,57 +1,63 @@
 import SwiftUI
 
-enum Theme {
-    static let ink = Color(red: 0.95, green: 0.93, blue: 0.88)
-    static let muted = Color(red: 0.72, green: 0.68, blue: 0.60)
-    static let amber = Color(red: 0.93, green: 0.62, blue: 0.28)
-    static let inTune = Color(red: 0.42, green: 0.78, blue: 0.48)
-    static let flat = Color(red: 0.45, green: 0.62, blue: 0.95)
-    static let sharp = Color(red: 0.93, green: 0.45, blue: 0.32)
-    static let card = Color.white.opacity(0.06)
-    static let background = Color(red: 0.08, green: 0.07, blue: 0.06)
+extension PitchVerdict {
+    var color: Color {
+        switch self {
+        case .listening: return .secondary
+        case .inTune: return .green
+        case .flat: return .blue
+        case .sharp: return .red
+        }
+    }
 }
 
+/// The system has no cents meter. The readout uses a text style so it follows Dynamic Type.
 struct Meter: View {
     var cents: Double?
     var level: Double
     var compact = false
 
+    @ScaledMetric(relativeTo: .title) private var baseDial = 190.0
+
     var body: some View {
-        let gauge = compact ? 88.0 : 150.0
-        let dial = compact ? 110.0 : 190.0
-        let readout = compact ? 22.0 : 42.0
-        let bar = compact ? 120.0 : 220.0
-        VStack(spacing: compact ? 8 : 14) {
+        let dial = compact ? baseDial * 0.58 : baseDial
+        let gauge = dial * 0.8
+        let bar = dial * 1.15
+        let verdict = PitchVerdict.from(cents: cents)
+        VStack(spacing: compact ? 8 : 12) {
             ZStack {
                 Circle()
-                    .stroke(Color.white.opacity(0.08), lineWidth: compact ? 6 : 10)
+                    .stroke(Color.secondary.opacity(0.25), lineWidth: compact ? 6 : 10)
                 Circle()
                     .trim(from: 0, to: 0.5)
-                    .stroke(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: compact ? 6 : 10, lineCap: .round))
+                    .stroke(Color.secondary.opacity(0.35), style: StrokeStyle(lineWidth: compact ? 6 : 10, lineCap: .round))
                     .rotationEffect(.degrees(180))
                 Needle(cents: cents ?? 0)
-                    .stroke(color, style: StrokeStyle(lineWidth: compact ? 3 : 4, lineCap: .round))
+                    .stroke(verdict.color, style: StrokeStyle(lineWidth: compact ? 3 : 4, lineCap: .round))
                     .frame(width: gauge, height: gauge)
-                VStack(spacing: 2) {
-                    Text(cents.map { String(format: "%+.1f", $0) } ?? "—")
-                        .font(.system(size: readout, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(ink)
-                    Text("cents")
-                        .font(.caption2)
-                        .foregroundStyle(Theme.muted)
-                }
-                .offset(y: compact ? 16 : 28)
             }
-            .frame(width: dial, height: compact ? 96 : 150)
+            .frame(width: dial, height: compact ? dial * 0.72 : dial * 0.78)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(cents.map { String(format: "%+.1f cents", $0) } ?? "No pitch")
+
+            VStack(spacing: 0) {
+                Text(cents.map { String(format: "%+.1f", $0) } ?? "—")
+                    .font(compact ? .title3 : .title)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                    .foregroundStyle(verdict.color)
+                Text("cents")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityHidden(true)
+
             Capsule()
-                .fill(Color.white.opacity(0.08))
+                .fill(Color.secondary.opacity(0.25))
                 .frame(height: compact ? 4 : 6)
                 .overlay(alignment: .leading) {
                     Capsule()
-                        .fill(Theme.amber)
+                        .fill(Color.primary)
                         .frame(width: max(6, bar * level))
                 }
                 .frame(width: bar)
@@ -59,14 +65,6 @@ struct Meter: View {
                 .accessibilityValue("\(Int(level * 100)) percent")
         }
     }
-
-    private var color: Color {
-        guard let cents else { return Theme.muted }
-        if abs(cents) < 1 { return Theme.inTune }
-        return cents < 0 ? Theme.flat : Theme.sharp
-    }
-
-    private var ink: Color { color }
 }
 
 private struct Needle: Shape {
@@ -84,6 +82,7 @@ private struct Needle: Shape {
     }
 }
 
+/// The system has no tuning-curve chart. Dragging or adjusting the curve selects a key.
 struct TuningCurve: View {
     var cents: [Double]
     var selected: Int
@@ -97,7 +96,7 @@ struct TuningCurve: View {
                 var axis = Path()
                 axis.move(to: CGPoint(x: 0, y: size.height / 2))
                 axis.addLine(to: CGPoint(x: size.width, y: size.height / 2))
-                context.stroke(axis, with: .color(.white.opacity(0.15)), lineWidth: 1)
+                context.stroke(axis, with: .color(.secondary.opacity(0.45)), lineWidth: 1)
                 guard cents.count > 1 else { return }
                 let limit = max(20, cents.map(abs).max() ?? 20)
                 var line = Path()
@@ -107,38 +106,41 @@ struct TuningCurve: View {
                     if index == 0 { line.move(to: CGPoint(x: x, y: y)) }
                     else { line.addLine(to: CGPoint(x: x, y: y)) }
                 }
-                context.stroke(line, with: .color(Theme.amber), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+                context.stroke(line, with: .color(.accentColor), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
                 if selected >= 0, selected < cents.count {
                     let x = size.width * CGFloat(selected) / CGFloat(cents.count - 1)
                     let y = size.height * (0.5 - CGFloat(cents[selected] / limit) * 0.42)
                     let dot = Path(ellipseIn: CGRect(x: x - 5, y: y - 5, width: 10, height: 10))
-                    context.fill(dot, with: .color(Theme.ink))
+                    context.fill(dot, with: .color(.primary))
                 }
             }
             .gesture(DragGesture(minimumDistance: 0).onEnded { value in
-                let index = Int((value.location.x / width * CGFloat(max(cents.count - 1, 1))).rounded())
-                onSelect(min(max(0, index), max(0, cents.count - 1)))
+                onSelect(index(at: value.location.x, width: width))
             })
             .frame(width: width, height: height)
         }
+        .accessibilityElement()
+        .accessibilityLabel("Tuning curve")
+        .accessibilityValue(selected >= 0 && selected < cents.count ? PianoLayout.label(selected) : "")
+        .accessibilityAdjustableAction { direction in
+            let next = direction == .increment ? selected + 1 : selected - 1
+            onSelect(min(max(0, next), max(0, cents.count - 1)))
+        }
+    }
+
+    private func index(at x: CGFloat, width: CGFloat) -> Int {
+        let count = max(cents.count - 1, 1)
+        let raw = Int((x / width * CGFloat(count)).rounded())
+        return min(max(0, raw), max(0, cents.count - 1))
     }
 }
 
 extension View {
-    /// Pins the keyboard to the bottom edge. On iOS 26 and later the bar
-    /// reserves its own space and moves aside when the system bar does,
-    /// including the vertical bar on iPhone Duo.
+    /// The keyboard is a functional layer. `safeAreaBar` supplies the system bar, including Liquid Glass, and keeps the keys off the iPhone Duo side bar.
     @ViewBuilder
     func dockedKeyboard<Keyboard: View>(@ViewBuilder keyboard: () -> Keyboard) -> some View {
-        if #available(iOS 26.0, macOS 26.0, visionOS 26.0, watchOS 26.0, *) {
-            safeAreaBar(edge: .bottom, spacing: 0) {
-                keyboard()
-            }
-        } else {
-            VStack(spacing: 0) {
-                self
-                keyboard()
-            }
+        safeAreaBar(edge: .bottom, spacing: 0) {
+            keyboard()
         }
     }
 }

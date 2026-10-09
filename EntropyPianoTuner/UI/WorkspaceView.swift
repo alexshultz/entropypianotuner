@@ -3,44 +3,53 @@ import SwiftUI
 struct LibraryView: View {
     @Bindable var session: TunerSession
     var selection: Binding<UUID?>?
+    @State private var pendingDelete: Piano?
 
     var body: some View {
         List(selection: selection) {
             Section {
+                ForEach(session.pianos) { piano in
+                    row(piano)
+                        .tag(piano.id)
+                        .swipeActions(edge: .trailing) {
+                            Button("Delete", role: .destructive) {
+                                pendingDelete = piano
+                            }
+                        }
+                        #if !os(watchOS)
+                        .contextMenu {
+                            Button("Delete", role: .destructive) {
+                                pendingDelete = piano
+                            }
+                        }
+                        #endif
+                }
+            } footer: {
                 Text("Record each note, then let the entropy search find the tuning for this piano.")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.muted)
-                    .listRowBackground(Color.clear)
-                    #if !os(watchOS)
-                    .listRowSeparator(.hidden)
-                    #endif
-            }
-            ForEach(session.pianos) { piano in
-                row(piano)
-                    .tag(piano.id)
-                    .listRowBackground(Color.clear)
-                    #if !os(watchOS)
-                    .listRowSeparator(.hidden)
-                    #endif
-                    #if os(watchOS)
-                    .swipeActions(edge: .trailing) {
-                        Button("Delete", role: .destructive) {
-                            delete(piano)
-                        }
-                    }
-                    #else
-                    .contextMenu {
-                        Button("Delete", role: .destructive) {
-                            delete(piano)
-                        }
-                    }
-                    #endif
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(Theme.background)
-        .navigationTitle("Entropy Piano Tuner")
+        #if os(iOS)
+        .listStyle(.insetGrouped)
+        #elseif os(macOS)
+        .listStyle(.sidebar)
+        #endif
+        .navigationTitle("Pianos")
+        .confirmationDialog(
+            "Delete \(pendingDelete?.name ?? "this piano")?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let pendingDelete { delete(pendingDelete) }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text("This removes the piano and its recordings.")
+        }
         .toolbar {
             Button("New piano", systemImage: "plus") { session.createPiano() }
         }
@@ -56,23 +65,19 @@ struct LibraryView: View {
     @ViewBuilder
     private func row(_ piano: Piano) -> some View {
         let label = HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(piano.name)
-                    .font(.headline)
-                    .foregroundStyle(Theme.ink)
                 Text("\(piano.recordedCount) of 88 recorded")
                     .font(.caption)
-                    .foregroundStyle(Theme.muted)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             if piano.tuningCents != nil {
                 Text(piano.tuningIsCurrent ? "Tuned" : "Stale")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(piano.tuningIsCurrent ? Theme.inTune : Theme.amber)
+                    .font(.caption)
+                    .foregroundStyle(piano.tuningIsCurrent ? Color.green : Color.orange)
             }
         }
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
         if selection != nil {
             label
@@ -85,23 +90,14 @@ struct LibraryView: View {
 
 struct WorkspaceView: View {
     @Bindable var session: TunerSession
-    @State private var name = ""
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Page", selection: $session.page) {
-                ForEach(WorkspacePage.allCases) { page in
-                    Text(page.label).tag(page)
-                }
-            }
-            #if os(watchOS)
-            .pickerStyle(.navigationLink)
-            #else
-            .pickerStyle(.segmented)
+            #if !os(macOS)
+            pagePicker
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
             #endif
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-
             Group {
                 switch session.page {
                 case .record: RecordPage(session: session)
@@ -119,7 +115,6 @@ struct WorkspaceView: View {
                 onSelect: { session.select($0) }
             )
         }
-        .background(Theme.background)
         .navigationTitle(session.piano?.name ?? "Piano")
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -128,18 +123,42 @@ struct WorkspaceView: View {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Pianos") { session.closePiano() }
             }
+            #if os(macOS)
+            ToolbarItem(placement: .principal) {
+                pagePicker
+            }
+            #endif
             ToolbarItem(placement: .primaryAction) {
-                Button(session.microphoneOn ? "Stop mic" : "Mic") {
-                    session.toggleMicrophone()
-                }
+                microphoneButton
             }
         }
         .onAppear {
-            name = session.piano?.name ?? ""
             if !session.microphoneOn { Task { await session.start() } }
         }
         .onDisappear { session.stop() }
         .onChange(of: session.page) { _, _ in session.select(session.selectedKey) }
+    }
+
+    private var pagePicker: some View {
+        Picker("Page", selection: $session.page) {
+            ForEach(WorkspacePage.allCases) { page in
+                Text(page.label).tag(page)
+            }
+        }
+        #if os(watchOS)
+        .pickerStyle(.navigationLink)
+        #else
+        .pickerStyle(.segmented)
+        #endif
+    }
+
+    private var microphoneButton: some View {
+        Button {
+            session.toggleMicrophone()
+        } label: {
+            Image(systemName: session.microphoneOn ? "mic.fill" : "mic.slash")
+        }
+        .accessibilityLabel(session.microphoneOn ? "Stop microphone" : "Start microphone")
     }
 }
 
@@ -147,99 +166,175 @@ struct RecordPage: View {
     @Bindable var session: TunerSession
 
     var body: some View {
-        VStack(spacing: 18) {
-            Text(PianoLayout.label(session.selectedKey))
-                .font(.system(size: 56, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.ink)
-            Text("\(session.piano?.recordedCount ?? 0) of 88 recorded")
-                .foregroundStyle(Theme.muted)
-            Meter(cents: session.reading.cents, level: session.reading.level)
-            Text(session.status.isEmpty ? "Play the selected note and hold it." : session.status)
-                .font(.subheadline)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Theme.muted)
-                .padding(.horizontal, 24)
-            HStack(spacing: 12) {
-                Button(session.autoCapture ? "Auto capture on" : "Auto capture off") {
-                    session.autoCapture.toggle()
+        ScrollView {
+            VStack(spacing: 20) {
+                Text(PianoLayout.label(session.selectedKey))
+                    .font(.largeTitle.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
+                Text("\(session.piano?.recordedCount ?? 0) of 88 recorded")
+                    .foregroundStyle(.secondary)
+                Meter(cents: session.reading.cents, level: session.reading.level)
+                Text(session.status.isEmpty ? "Play the selected note and hold it." : session.status)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: actionSpacing) {
+                    autoCapture
+                    Button("Capture") { session.captureNow() }
+                        .buttonStyle(.borderedProminent)
+                    Button("Clear") { session.clearKey() }
+                        .buttonStyle(.bordered)
                 }
-                .buttonStyle(FilledButton(prominent: session.autoCapture))
-                Button("Capture") { session.captureNow() }
-                    .buttonStyle(FilledButton(prominent: false))
-                Button("Clear") { session.clearKey() }
-                    .buttonStyle(FilledButton(prominent: false))
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .frame(maxWidth: 640)
+            .frame(maxWidth: .infinity)
         }
-        .padding(.top, 12)
+    }
+
+    @ViewBuilder
+    private var autoCapture: some View {
+        #if os(macOS)
+        Toggle("Auto capture", isOn: $session.autoCapture)
+            .toggleStyle(.checkbox)
+        #else
+        if session.autoCapture {
+            Button {
+                session.autoCapture = false
+            } label: {
+                Label("Auto capture", systemImage: "checkmark.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityValue("On")
+        } else {
+            Button {
+                session.autoCapture = true
+            } label: {
+                Label("Auto capture", systemImage: "circle")
+            }
+            .buttonStyle(.bordered)
+            .accessibilityValue("Off")
+        }
+        #endif
+    }
+
+    private var actionSpacing: CGFloat {
+        #if os(visionOS)
+        20
+        #else
+        12
+        #endif
     }
 }
 
 struct CalculatePage: View {
     @Bindable var session: TunerSession
+    @State private var nameDraft = ""
+    @FocusState private var nameFocused: Bool
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("The search shifts each note until the combined overtones overlap as much as they can. A4 stays at the concert pitch.")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.muted)
+        Form {
+            Section {
                 Picker("Method", selection: $session.usePitchRaise) {
                     Text("Entropy").tag(false)
                     Text("Pitch raise").tag(true)
                 }
                 #if os(watchOS)
-            .pickerStyle(.navigationLink)
-            #else
-            .pickerStyle(.segmented)
-            #endif
+                .pickerStyle(.navigationLink)
+                #else
+                .pickerStyle(.segmented)
+                #endif
                 if !session.usePitchRaise {
                     Picker("Accuracy", selection: $session.accuracy) {
                         ForEach(CalculationAccuracy.allCases) { item in
                             Text(item.label).tag(item)
                         }
                     }
-                    HStack {
-                        Text("Seed")
+                    LabeledContent("Seed") {
                         TextField("0", text: $session.seedText)
                             #if os(iOS) || os(visionOS)
                             .keyboardType(.numberPad)
                             #endif
                             .multilineTextAlignment(.trailing)
                     }
-                    .padding(12)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            } footer: {
+                Text("The search shifts each note until the combined overtones overlap as much as they can. A4 stays at the concert pitch.")
+            }
+
+            Section("Piano") {
+                TextField("Name", text: $nameDraft)
+                    .focused($nameFocused)
+                    .onSubmit { commitName() }
+                Stepper(value: concertPitch, in: 415...466, step: 1) {
+                    Text("A4 at \(Int((session.piano?.concertPitch ?? 440).rounded())) Hz")
+                        .monospacedDigit()
                 }
                 Stepper(value: bassBreak, in: 8...40) {
                     Text("Bass break at \(PianoLayout.label(session.piano?.bassBreak ?? 27))")
                 }
+            }
+
+            Section {
                 if session.calculating {
                     ProgressView(value: session.progress)
                     Button("Stop") { session.stopCalculation() }
-                        .buttonStyle(FilledButton(prominent: false))
+                        .buttonStyle(.bordered)
                 } else {
                     Button("Calculate tuning") { session.calculate() }
-                        .buttonStyle(FilledButton(prominent: true))
+                        .buttonStyle(.borderedProminent)
                 }
-                if let cents = session.piano?.tuningCents {
+            }
+
+            if let cents = session.piano?.tuningCents {
+                Section("Tuning curve") {
                     TuningCurve(cents: cents, selected: session.selectedKey) { session.select($0) }
                         .frame(height: 180)
-                        .padding(8)
-                        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    Text(session.piano?.tuningIsCurrent == true ? "Curve matches the current concert pitch." : "Concert pitch changed. Calculate again before tuning.")
+                    Text(session.piano?.tuningIsCurrent == true
+                         ? "Curve matches the current concert pitch."
+                         : "Concert pitch changed. Calculate again before tuning.")
                         .font(.caption)
-                        .foregroundStyle(Theme.muted)
+                        .foregroundStyle(.secondary)
                 }
-                Text(session.status)
-                    .font(.footnote)
-                    .foregroundStyle(Theme.muted)
-                Text("Pull a string only a little at a time. A large pitch raise can break a string.")
-                    .font(.caption)
-                    .foregroundStyle(Theme.muted)
             }
-            .padding(20)
-            .foregroundStyle(Theme.ink)
+
+            Section {
+                if !session.status.isEmpty {
+                    Text(session.status)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Text("Pull a string only a little at a time. A large pitch raise can break a string.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
+        .formStyle(.grouped)
+        .onAppear { nameDraft = session.piano?.name ?? "" }
+        .onDisappear { commitName() }
+        .onChange(of: nameFocused) { _, focused in
+            if !focused { commitName() }
+        }
+        .onChange(of: session.piano?.name) { _, name in
+            if !nameFocused { nameDraft = name ?? "" }
+        }
+    }
+
+    private func commitName() {
+        let trimmed = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != session.piano?.name else {
+            if trimmed.isEmpty { nameDraft = session.piano?.name ?? "" }
+            return
+        }
+        session.rename(trimmed)
+    }
+
+    private var concertPitch: Binding<Double> {
+        Binding(
+            get: { session.piano?.concertPitch ?? 440 },
+            set: { session.setConcertPitch($0) }
+        )
     }
 
     private var bassBreak: Binding<Int> {
@@ -254,62 +349,56 @@ struct TunePage: View {
     @Bindable var session: TunerSession
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text(PianoLayout.label(session.selectedKey))
-                .font(.system(size: 44, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.ink)
-            if let target = session.piano?.targetFrequency(for: session.selectedKey) {
-                Text(String(format: "Target %.2f Hz", target))
-                    .foregroundStyle(Theme.muted)
-                    .monospacedDigit()
-            } else {
-                Text("Calculate a tuning first.")
-                    .foregroundStyle(Theme.amber)
+        ScrollView {
+            VStack(spacing: 16) {
+                Text(PianoLayout.label(session.selectedKey))
+                    .font(.largeTitle.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
+                if let target = session.piano?.targetFrequency(for: session.selectedKey) {
+                    Text(String(format: "Target %.2f Hz", target))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                } else {
+                    Text("Calculate a tuning first.")
+                        .foregroundStyle(.secondary)
+                }
+                Meter(cents: session.reading.cents, level: session.reading.level)
+                HStack(spacing: actionSpacing) {
+                    Button("−1¢") { session.nudgeSelected(by: -1) }
+                        .buttonStyle(.bordered)
+                    Button("In tune") { session.markTuned() }
+                        .buttonStyle(.borderedProminent)
+                    Button("+1¢") { session.nudgeSelected(by: 1) }
+                        .buttonStyle(.bordered)
+                }
+                if let verdict {
+                    Text(verdict.label)
+                        .font(.headline)
+                        .foregroundStyle(verdict.color)
+                }
+                Text("Mute the other strings of this note, match the center string, then tune the unisons to it.")
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
             }
-            Meter(cents: session.reading.cents, level: session.reading.level)
-            HStack(spacing: 10) {
-                Button("−1¢") { session.nudgeSelected(by: -1) }
-                Button("In tune") { session.markTuned() }
-                Button("+1¢") { session.nudgeSelected(by: 1) }
-            }
-            .buttonStyle(FilledButton(prominent: false))
-            Text(verdict)
-                .font(.headline)
-                .foregroundStyle(verdictColor)
-            Text("Mute the other strings of this note, match the center string, then tune the unisons to it.")
-                .font(.caption)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Theme.muted)
-                .padding(.horizontal, 28)
-            Spacer(minLength: 0)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .frame(maxWidth: 640)
+            .frame(maxWidth: .infinity)
         }
-        .padding(.top, 8)
     }
 
-    private var verdict: String {
-        guard session.piano?.targetFrequency(for: session.selectedKey) != nil else { return "" }
-        guard let cents = session.reading.cents else { return "Listening" }
-        if abs(cents) < 1 { return "In tune" }
-        return cents < 0 ? "Flat" : "Sharp"
+    private var verdict: PitchVerdict? {
+        guard session.piano?.targetFrequency(for: session.selectedKey) != nil else { return nil }
+        return PitchVerdict.from(cents: session.reading.cents)
     }
 
-    private var verdictColor: Color {
-        guard let cents = session.reading.cents else { return Theme.muted }
-        if abs(cents) < 1 { return Theme.inTune }
-        return cents < 0 ? Theme.flat : Theme.sharp
-    }
-}
-
-struct FilledButton: ButtonStyle {
-    var prominent: Bool
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.subheadline.weight(.semibold))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .foregroundStyle(prominent ? Color.black : Theme.ink)
-            .background(prominent ? Theme.amber : Theme.card, in: Capsule())
-            .opacity(configuration.isPressed ? 0.7 : 1)
+    private var actionSpacing: CGFloat {
+        #if os(visionOS)
+        20
+        #else
+        12
+        #endif
     }
 }
 
@@ -356,8 +445,7 @@ struct RootView: View {
             }
             #endif
         }
-        .preferredColorScheme(.dark)
-        .tint(Theme.amber)
+        .focusedSceneValue(\.tunerSession, session)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { session.refreshFromStore() }
         }
