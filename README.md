@@ -4,6 +4,6 @@ Native SwiftUI port of [Entropy Piano Tuner](https://gitlab.com/tp3/Entropy-Pian
 
 Coding agents: read [AGENTS.md](AGENTS.md) before changing the project. That file is the operating manual. When it and the Swift disagree, trust the Swift.
 
-Open `EntropyPianoTuner.xcodeproj` in Xcode 27 and run the `EntropyPianoTuner` scheme. The deployment floors are iOS 17, macOS 14, visionOS 1, and watchOS 10.
+Open `EntropyPianoTuner.xcodeproj` in Xcode 27 and run the `EntropyPianoTuner` scheme. The deployment floors are iOS 27, macOS 27, visionOS 27, and watchOS 27. Apple TV is not a target.
 
 This program is free software under the GNU General Public License, version 3. See `LICENSE` and `COPYRIGHT`.

@@ -17,9 +17,9 @@ Local checkout on Alex's Mac: `/Users/alex/Projects/EntropyPianoTuner`. Open `En
 These override convenience, a green build, and a guess about what the original app did.
 
 1. Keep `LICENSE`, `COPYRIGHT`, and the Hinrichsen/Wick credit. The port stays GPL-3.
-2. Do not add Qt, FFTW, libuv, qwt, tp3log, CocoaPods, or Swift packages. `packageProductDependencies` stays empty.
-3. Deployment floors stay iOS 17.0, macOS 14.0, visionOS 1.0, and watchOS 10.0. Call a newer API only behind `#available` or an `#if` that still compiles for those floors.
-4. One application target covers iPhone, iPad, Mac, Vision Pro, and Apple Watch. Apple TV stays out. `SUPPORTS_MACCATALYST`, `SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD`, and `SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD` stay `NO`. `TARGETED_DEVICE_FAMILY` stays `1,2,4,7`.
+2. Do not add Qt, FFTW, libuv, qwt, or tp3log. Swift packages are allowed when the Apple SDK does not already provide the behavior, and when a package is how this app follows the OS 27 design guidelines. Prefer a system control, an SF Symbol, or a system material over a package. Do not add a package that duplicates an Apple framework.
+3. Deployment floors are iOS 27.0, macOS 27.0, visionOS 27.0, and watchOS 27.0. Older systems are abandoned. An API that arrived after 27.0, including iPhone Duo calls that need iOS 27.1, stays behind `#available` so an iOS 27.0 phone still builds. Do not set the iOS floor to 27.1. The connected phone is iOS 27.0.1.
+4. One application target covers iPhone, iPad, Mac, Vision Pro, and Apple Watch. Apple TV stays out. Apple treats tvOS as its own platform, with a remote and a focus system, and an iPhone app is not required to ship a tvOS version. `SUPPORTS_MACCATALYST`, `SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD`, and `SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD` stay `NO`. `TARGETED_DEVICE_FAMILY` stays `1,2,4,7`. Do not add `appletvos` or `appletvsimulator` to `SUPPORTED_PLATFORMS`.
 5. Do not set `CODE_SIGNING_ALLOWED = NO`. An unsigned install fails with "The executable is not codesigned", `MIInstallerErrorDomain` 13, `0xe800801c`.
 6. Signing stays automatic on team `N8D3Z8U4Y9`. `CODE_SIGN_ENTITLEMENTS` stays `EntropyPianoTuner.entitlements` on Debug and Release. There is no second team id.
 7. Do not put an Info.plist, a property list, or an entitlements file inside `EntropyPianoTuner/`. That folder is a `PBXFileSystemSynchronizedRootGroup`. Xcode copies those files and also processes them, and the build fails. Entitlements stay at the project root. The background-mode plist stays in `Supporting/`.
@@ -34,7 +34,7 @@ These override convenience, a green build, and a guess about what the original a
 16. Do not add `aps-environment` to `EntropyPianoTuner.entitlements`. One file signs Debug and Release on every platform. A hardcoded `development` value breaks Release.
 17. `WindowGroup` has no `.modelContainer`. `PianoStore` owns the one container. Do not attach a second one.
 18. `TunerSession.createPiano` builds the piano with `let` and assigns `self.piano`. The local value is not mutated. Leave that unless you are actually mutating it.
-19. Do not reinstall Xcode and do not run `mas`. The installed Xcode is 27.0. iPhone Duo full-bleed, hinge, and vertical-bar layout need Xcode 27.1, which is not installed. Layout for that phone is size classes plus `safeAreaBar` on OS 26 and later.
+19. Xcode 27.0 (27A266a) is installed at `/Applications/Xcode.app`. Xcode 27.1 release candidate, build 27A9275, is the Duo toolchain and is not on the Mac App Store. Install it beside Xcode 27.0. Do not replace `/Applications/Xcode.app` until a build of this project has succeeded with 27.1. Do not run `mas` expecting it to supply 27.1. iPhone Duo full-bleed, hinge, and vertical-bar layout need that Xcode. Until then, layout for that phone is size classes plus `safeAreaBar`.
 20. EatWatch (`/Users/alex/Projects/EatWatch`), the Seldon vault, and Grok memory files are outside this repo. Do not edit them as part of tuner work.
 
 ## Where to change things
@@ -90,6 +90,24 @@ swiftc -framework Accelerate \
 
 The last line it prints is `OK`. The low-accuracy search takes a couple of minutes.
 
+## Design
+
+UI chrome follows `projects/Apple-OS27-Design-Guidelines.md` in the Seldon vault. Read that page before changing screens. System controls, Liquid Glass on functional layers only, semantic colors, SF Symbols, Dynamic Type, and about 44 pt targets win over a custom button style or a fixed RGB palette.
+
+That page does not win over the entropy search, the CloudKit model, signing, or the Apple TV exclusion. The piano keyboard, the cents meter, and the tuning curve stay custom because the system has no control for them. `Theme` and the forced dark scheme are the current look. The redesign replaces that chrome and keeps record, calculate, and tune working.
+
+## Tests
+
+New behavior and bug fixes start with a failing XCTest in `EntropyPianoTunerTests`. Run it and read the failure before writing the production change. Then write the minimum code that makes it pass. A test that passes on the first run did not prove the new behavior. `AlgorithmCheck` stays the numerical direction check. It is not a substitute for that failing test, and it is still outside the app target.
+
+The test bundle is `EntropyPianoTunerTests`, hosted on the Mac app. Run it with:
+
+```sh
+xcodebuild -project EntropyPianoTuner.xcodeproj -scheme EntropyPianoTuner \
+  -destination 'platform=macOS' -derivedDataPath /tmp/ept-build \
+  -allowProvisioningUpdates test
+```
+
 ## Layout and the platforms that reject APIs
 
 `RootView` is a `NavigationSplitView` on iPhone, iPad, Mac, and visionOS. On watchOS it is a `NavigationStack` that swaps `LibraryView` and `WatchWorkspace`. `WorkspaceView` still compiles for watchOS, so a watch-unavailable call there breaks the watch build even though the watch never shows that view.
@@ -114,7 +132,7 @@ The watch has no 88-key keyboard. The crown selects the key. Capture, calculate,
 
 Mac window default size is 1100×780, minimum 880×680. visionOS default size is 1280×800. The microphone starts when a workspace appears and stops when it disappears. The usage string is the target's `INFOPLIST_KEY_NSMicrophoneUsageDescription`.
 
-`Theme.dockedKeyboard` is the keyboard inset. On OS 26 and later, `safeAreaBar(edge: .bottom)` is what moves the keyboard off the iPhone Duo vertical bar. Do not raise the deployment target to call it unconditionally.
+`Theme.dockedKeyboard` is the keyboard inset. The floor is OS 27, so `safeAreaBar(edge: .bottom)` is available on every system this app runs. It is what moves the keyboard off the iPhone Duo vertical bar. The older `VStack` fallback may go away when the keyboard is redesigned.
 
 ## Tuning pipeline
 
@@ -202,7 +220,7 @@ The vision stack used to be named `AppIcon.solidimagestack`. The rename is what 
 
 ## This Mac and this phone (2026-10-08)
 
-Xcode 27.0 (27A266a) is at `/Applications/Xcode.app`. `xcode-select` points there. The license is accepted. Do not reinstall it.
+Xcode 27.0 (27A266a) is at `/Applications/Xcode.app`. `xcode-select` points there. The license is accepted. Xcode 27.1 RC (27A9275) is the version that adds iPhone Duo, and the App Store copy is still 27.0.
 
 Apple ID `alex.shultz@mac.com`. Team name Alex Shultz. Team id `N8D3Z8U4Y9`, Individual, paid. Xcode records `isFreeProvisioningTeam = 0`. The codesigning identity on this Mac is `Apple Development: alex.shultz@mac.com (4TRS65CTUB)`. It is the valid identity. Do not create another.
 
