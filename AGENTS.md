@@ -17,8 +17,8 @@ Local checkout on Alex's Mac: `/Users/alex/Projects/EntropyPianoTuner`. Open `En
 These override convenience, a green build, and a guess about what the original app did.
 
 1. Keep `LICENSE`, `COPYRIGHT`, and the Hinrichsen/Wick credit. The port stays GPL-3.
-2. Do not add Qt, FFTW, libuv, qwt, or tp3log. Swift packages are allowed when the Apple SDK does not already provide the behavior, and when a package is how this app follows the OS 27 design guidelines. Prefer a system control, an SF Symbol, or a system material over a package. Do not add a package that duplicates an Apple framework.
-3. Deployment floors are iOS 27.0, macOS 27.0, visionOS 27.0, and watchOS 27.0. Older systems are abandoned. An API that arrived after 27.0, including iPhone Duo calls that need iOS 27.1, stays behind `#available` so an iOS 27.0 phone still builds. Do not set the iOS floor to 27.1. The connected phone is iOS 27.0.1.
+2. Do not add Qt, FFTW, libuv, qwt, or tp3log. Swift packages are welcome when they make the app better. A package is not a second-class choice. Use an Apple framework when that framework already does the job, so the project does not carry a second copy of the same behavior. A system control, an SF Symbol, or a system material is that case for ordinary UI.
+3. Deployment floors are iOS 27.0, macOS 27.0, visionOS 27.0, and watchOS 27.0. Older systems are abandoned. Do not depend on an API that exists only in an unreleased system. The connected phone is iOS 27.0.1, so the iOS floor stays 27.0.
 4. One application target covers iPhone, iPad, Mac, Vision Pro, and Apple Watch. Apple TV stays out. Apple treats tvOS as its own platform, with a remote and a focus system, and an iPhone app is not required to ship a tvOS version. `SUPPORTS_MACCATALYST`, `SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD`, and `SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD` stay `NO`. `TARGETED_DEVICE_FAMILY` stays `1,2,4,7`. Do not add `appletvos` or `appletvsimulator` to `SUPPORTED_PLATFORMS`.
 5. Do not set `CODE_SIGNING_ALLOWED = NO`. An unsigned install fails with "The executable is not codesigned", `MIInstallerErrorDomain` 13, `0xe800801c`.
 6. Signing stays automatic on team `N8D3Z8U4Y9`. `CODE_SIGN_ENTITLEMENTS` stays `EntropyPianoTuner.entitlements` on Debug and Release. There is no second team id.
@@ -34,7 +34,7 @@ These override convenience, a green build, and a guess about what the original a
 16. Do not add `aps-environment` to `EntropyPianoTuner.entitlements`. One file signs Debug and Release on every platform. A hardcoded `development` value breaks Release.
 17. `WindowGroup` has no `.modelContainer`. `PianoStore` owns the one container. Do not attach a second one.
 18. `TunerSession.createPiano` builds the piano with `let` and assigns `self.piano`. The local value is not mutated. Leave that unless you are actually mutating it.
-19. Xcode 27.0 (27A266a) is installed at `/Applications/Xcode.app`. Xcode 27.1 release candidate, build 27A9275, is the Duo toolchain and is not on the Mac App Store. Install it beside Xcode 27.0. Do not replace `/Applications/Xcode.app` until a build of this project has succeeded with 27.1. Do not run `mas` expecting it to supply 27.1. iPhone Duo full-bleed, hinge, and vertical-bar layout need that Xcode. Until then, layout for that phone is size classes plus `safeAreaBar`.
+19. Build with the released Xcode 27.0 at `/Applications/Xcode.app`. Xcode 27.1 is still a release candidate and is not on the Mac App Store. This project does not require it. Do not install it, and do not switch `xcode-select` to it, unless a released Xcode 27.1 is needed for a feature that 27.0 cannot build.
 20. EatWatch (`/Users/alex/Projects/EatWatch`), the Seldon vault, and Grok memory files are outside this repo. Do not edit them as part of tuner work.
 
 ## Where to change things
@@ -220,7 +220,7 @@ The vision stack used to be named `AppIcon.solidimagestack`. The rename is what 
 
 ## This Mac and this phone (2026-10-08)
 
-Xcode 27.0 (27A266a) is at `/Applications/Xcode.app`. `xcode-select` points there. The license is accepted. Xcode 27.1 RC (27A9275) is the version that adds iPhone Duo, and the App Store copy is still 27.0.
+Xcode 27.0 (27A266a) is at `/Applications/Xcode.app`. `xcode-select` points there. The license is accepted. Xcode 27.1 is a release candidate, build 27A9275, and the App Store copy is still 27.0. Nothing in this project requires the candidate.
 
 Apple ID `alex.shultz@mac.com`. Team name Alex Shultz. Team id `N8D3Z8U4Y9`, Individual, paid. Xcode records `isFreeProvisioningTeam = 0`. The codesigning identity on this Mac is `Apple Development: alex.shultz@mac.com (4TRS65CTUB)`. It is the valid identity. Do not create another.
 
