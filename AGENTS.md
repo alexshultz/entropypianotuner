@@ -23,7 +23,7 @@ A native SwiftUI port of Entropy Piano Tuner by Haye Hinrichsen and Christoph Wi
 
 The port uses Swift, SwiftUI, AVFoundation, Accelerate, SwiftData, and CloudKit. It stays GPL-3. Upstream is <https://gitlab.com/tp3/Entropy-Piano-Tuner>. The GitHub mirror is <https://github.com/levush/Entropy-Piano-Tuner>. The modules that were ported are `modules/algorithms/entropyminimizer/entropyminimizer.cpp` (about 791 lines) and `auditorypreprocessing.cpp` (about 447 lines). FFTW, Qt, libuv, qwt, and tp3log stay out. Output is not claimed to be bit-identical to the Qt app. Accelerate's FFT and the Hann window are the likely sources of a numerical difference.
 
-Local checkout on Alex's Mac: `/Users/alex/Projects/EntropyPianoTuner`. Open `EntropyPianoTuner.xcodeproj`. There is no separate `.xcworkspace`. That folder is its own git repository and it has no remote. The files match GitHub `main` at <https://github.com/alexshultz/entropypianotuner>. The commit history does not. Do not force-push the local root over `main`.
+Local checkout on Alex's Mac: `/Users/alex/Projects/EntropyPianoTuner`. Open `EntropyPianoTuner.xcodeproj`. There is no separate `.xcworkspace`. `origin` is <https://github.com/alexshultz/entropypianotuner>. `main` tracks `origin/main`. The local history and the earlier GitHub history were joined after their trees matched. Push ordinary commits to `main`. Do not force-push.
 
 ## Rules
 
